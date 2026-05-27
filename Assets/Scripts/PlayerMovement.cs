@@ -2,70 +2,57 @@ using UnityEngine;
 
 public class PlayerMovement : MonoBehaviour
 {
-    public float walkSpeed = 5f;
-    public float runSpeed = 9f;
-    public float rotationSpeed = 120f;
-    public float jumpForce = 5f;
+    public float walkSpeed = 6f;
+    public float runSpeed = 12f;
+    public float rotationSmoothTime = 0.1f;
 
-    private Rigidbody rb;
-    private bool isGrounded;
+    CharacterController controller;
+    Animator animator;
 
-    private Animator animator;
+    float rotationSmoothVelocity;
 
     void Start()
     {
-        rb = GetComponent<Rigidbody>();
-
-        // Better physics settings
-        rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
-        rb.interpolation = RigidbodyInterpolation.Interpolate;
+        controller = GetComponent<CharacterController>();
 
         animator = GetComponentInChildren<Animator>();
     }
 
     void Update()
     {
-        float vertical = Input.GetAxis("Vertical");
-        float horizontal = Input.GetAxis("Horizontal");
+        float horizontal = Input.GetAxisRaw("Horizontal");
+        float vertical = Input.GetAxisRaw("Vertical");
 
-        // ROTATE PLAYER
-        transform.Rotate(Vector3.up * horizontal * rotationSpeed * Time.deltaTime);
+        Vector3 direction = new Vector3(horizontal, 0f, vertical).normalized;
 
-        // CHECK RUN
-        bool isRunning = Input.GetKey(KeyCode.LeftShift);
+        float speed = 0f;
 
-        // CURRENT SPEED
-        float currentSpeed = isRunning ? runSpeed : walkSpeed;
-
-        // MOVEMENT
-        Vector3 move = transform.forward * vertical * currentSpeed * Time.deltaTime;
-
-        rb.MovePosition(rb.position + move);
-
-        // ANIMATIONS
-        bool isWalking = Mathf.Abs(vertical) > 0.1f;
-
-        animator.SetBool("isWalking", isWalking);
-        animator.SetBool("isRunning", isRunning && isWalking);
-
-        // JUMP
-        if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
+        if (direction.magnitude >= 0.1f)
         {
-            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+            float targetAngle =
+                Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg
+                + Camera.main.transform.eulerAngles.y;
+
+            float angle = Mathf.SmoothDampAngle(
+                transform.eulerAngles.y,
+                targetAngle,
+                ref rotationSmoothVelocity,
+                rotationSmoothTime
+            );
+
+            transform.rotation = Quaternion.Euler(0f, angle, 0f);
+
+            Vector3 moveDir =
+                Quaternion.Euler(0f, targetAngle, 0f) * Vector3.forward;
+
+            speed = Input.GetKey(KeyCode.LeftShift)
+                ? runSpeed
+                : walkSpeed;
+
+            controller.Move(moveDir.normalized * speed * Time.deltaTime);
         }
 
-        // STOP DRIFTING
-        rb.velocity = new Vector3(0, rb.velocity.y, 0);
-        rb.angularVelocity = Vector3.zero;
-    }
-
-    private void OnCollisionStay(Collision collision)
-    {
-        isGrounded = true;
-    }
-
-    private void OnCollisionExit(Collision collision)
-    {
-        isGrounded = false;
+        // ANIMATION
+        animator.SetFloat("Speed", speed);
     }
 }
